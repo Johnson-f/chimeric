@@ -235,8 +235,9 @@ markers = [
     "cohere: tests requiring Cohere provider",
     "grok: tests requiring Grok provider",
     "groq: tests requiring Groq provider",
+    "openrouter: tests requiring OpenRouter provider",
     "bare_install: tests with no optional dependencies",
-    "all_extras: tests with all optional dependencies",
+    "all_extras: tests with all extras dependencies",
     "vcr: tests using VCR cassettes",
 ]
 filterwarnings = [

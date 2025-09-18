@@ -408,7 +408,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             
             result = client._process_provider_stream_event(chunk, processor)
             
-            assert result is not None
+            # Tool call start events don't return chunks immediately, 
+            # they just update the processor state
+            assert result is None
 
     def test_process_provider_stream_event_finish(self):
         """Test processing stream event with finish reason."""
@@ -439,7 +441,20 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
             
             messages = [{"role": "user", "content": "Hello"}]
-            response = self.sample_response
+            
+            # Create a response with tool calls
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = "I'll help with that calculation"
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
+            response.choices = [choice]
+            
             tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
             tool_results = [ToolExecutionResult(call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10")]
             
@@ -447,7 +462,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             
             assert len(updated) == 3  # original + assistant + tool result
             assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] == "I'll help with that calculation"
             assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
 
     def test_extract_tool_calls_from_response_no_tool_calls_sync(self):
         """Test tool call extraction when no tool calls present."""
