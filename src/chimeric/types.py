@@ -82,6 +82,7 @@ class Provider(Enum):
     COHERE = "cohere"
     GROK = "grok"
     GROQ = "groq"
+    OPENROUTER = "openrouter"
 
 
 ###################

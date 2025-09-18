@@ -18,6 +18,7 @@ def isolate_environment(monkeypatch):
         "GROK_API_KEY",
         "GROK_API_TOKEN",
         "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
     ]
 
     for var in api_key_vars:
@@ -35,6 +36,7 @@ def mock_api_keys():
         "cohere_api_key": "test-cohere-key",
         "grok_api_key": "test-grok-key",
         "groq_api_key": "test-groq-key",
+        "openrouter_api_key": "test-openrouter-key",
     }
 
 

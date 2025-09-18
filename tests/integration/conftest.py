@@ -30,6 +30,7 @@ def real_api_keys():
         "cohere_api_key": os.environ.get("COHERE_API_KEY", os.environ.get("CO_API_KEY")),
         "grok_api_key": os.environ.get("GROK_API_KEY", os.environ.get("GROK_API_TOKEN")),
         "groq_api_key": os.environ.get("GROQ_API_KEY"),
+        "openrouter_api_key": os.environ.get("OPENROUTER_API_KEY"),
     }
 
 
@@ -112,6 +113,13 @@ def provider_specific_kwargs():
         },
         "groq": {
             "base_url": "https://api.groq.com/openai/v1",
+        },
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "default_headers": {
+                "HTTP-Referer": "https://github.com/test/test",
+                "X-Title": "Chimeric Test Suite",
+            },
         },
     }
 

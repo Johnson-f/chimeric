@@ -47,6 +47,11 @@ def _build_provider_mappings() -> tuple[dict[Provider, type], dict[Provider, typ
         Provider.COHERE: ("chimeric.providers.cohere.client", "CohereClient", "CohereAsyncClient"),
         Provider.GROK: ("chimeric.providers.grok.client", "GrokClient", "GrokAsyncClient"),
         Provider.GROQ: ("chimeric.providers.groq.client", "GroqClient", "GroqAsyncClient"),
+        Provider.OPENROUTER: (
+            "chimeric.providers.openrouter.client",
+            "OpenRouterClient",
+            "OpenRouterAsyncClient",
+        ),
     }
 
     # Try to import each provider and add to mappings if successful
@@ -100,6 +105,7 @@ class Chimeric:
         cohere_api_key: str | None = None,
         grok_api_key: str | None = None,
         groq_api_key: str | None = None,
+        openrouter_api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize Chimeric client with provider configuration.
@@ -114,6 +120,7 @@ class Chimeric:
         - COHERE_API_KEY or CO_API_KEY
         - GROK_API_KEY or XAI_API_KEY
         - GROQ_API_KEY
+        - OPENROUTER_API_KEY
 
         Args:
             openai_api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
@@ -123,6 +130,7 @@ class Chimeric:
             cohere_api_key: Cohere API key (defaults to COHERE_API_KEY or CO_API_KEY env var)
             grok_api_key: xAI Grok API key (defaults to GROK_API_KEY or XAI_API_KEY env var)
             groq_api_key: Groq API key (defaults to GROQ_API_KEY env var)
+            openrouter_api_key: OpenRouter API key (defaults to OPENROUTER_API_KEY env var)
             **kwargs: Provider-specific options (timeout, base_url, max_retries, etc.)
 
         Raises:
@@ -147,6 +155,7 @@ class Chimeric:
             cohere_api_key,
             grok_api_key,
             groq_api_key,
+            openrouter_api_key,
             **kwargs,
         )
 
@@ -162,6 +171,7 @@ class Chimeric:
         cohere_api_key: str | None = None,
         grok_api_key: str | None = None,
         groq_api_key: str | None = None,
+        openrouter_api_key: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initializes providers from explicitly provided API keys.
@@ -174,6 +184,7 @@ class Chimeric:
             cohere_api_key: Cohere API key.
             grok_api_key: Grok API key.
             groq_api_key: Groq API key.
+            openrouter_api_key: OpenRouter API key.
             **kwargs: Additional provider-specific configuration parameters.
         """
         provider_configs: list[tuple[Provider, str | None]] = [
@@ -184,6 +195,7 @@ class Chimeric:
             (Provider.COHERE, cohere_api_key),
             (Provider.GROK, grok_api_key),
             (Provider.GROQ, groq_api_key),
+            (Provider.OPENROUTER, openrouter_api_key),
         ]
 
         # Initialize providers that have API keys provided.
@@ -211,6 +223,7 @@ class Chimeric:
             Provider.COHERE: ["COHERE_API_KEY", "CO_API_KEY"],
             Provider.GROK: ["GROK_API_KEY", "XAI_API_KEY"],
             Provider.GROQ: ["GROQ_API_KEY"],
+            Provider.OPENROUTER: ["OPENROUTER_API_KEY"],
         }
 
         # Check environment variables for each provider.
