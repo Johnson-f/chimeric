@@ -28,7 +28,7 @@ def test_openrouter_model_listing(api_keys):
         assert any("gpt" in model_id for model_id in model_ids)
         # And likely Claude models
         # Note: This might vary based on OpenRouter's available models
-        
+
         print(f"Found {len(models)} OpenRouter models")
 
 
@@ -554,7 +554,9 @@ def test_openrouter_async_tools_with_different_types(api_keys):
     with get_vcr().use_cassette(cassette_path):
         response = chimeric.generate(
             model="openai/gpt-4o-mini",
-            messages=[{"role": "user", "content": "Calculate 3 times 4, then format the word 'hello'"}],
+            messages=[
+                {"role": "user", "content": "Calculate 3 times 4, then format the word 'hello'"}
+            ],
             stream=False,
         )
 
@@ -593,12 +595,12 @@ def test_openrouter_capabilities(api_keys):
         pytest.skip("OpenRouter API key not found")
 
     chimeric = Chimeric(openrouter_api_key=api_keys["openrouter_api_key"])
-    
+
     # Test capabilities
     capabilities = chimeric.get_capabilities("openrouter")
     assert capabilities.streaming is True
     assert capabilities.tools is True
-    
+
     print(f"OpenRouter capabilities: {capabilities}")
 
 

@@ -115,18 +115,18 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
 
     def _list_models_impl(self) -> list[ModelSummary]:
         """Lists available models from the OpenRouter API.
-        
+
         Returns:
             A list of ModelSummary objects containing model information
             from OpenRouter's model registry.
         """
         return [
             ModelSummary(
-                id=model.id, 
+                id=model.id,
                 name=getattr(model, "name", model.id),
                 owned_by=getattr(model, "owned_by", "openrouter"),
                 created_at=getattr(model, "created", None),
-                metadata=model.__dict__ if hasattr(model, "__dict__") else {}
+                metadata=model.__dict__ if hasattr(model, "__dict__") else {},
             )
             for model in self.client.models.list()
         ]
@@ -140,11 +140,13 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         for msg in messages:
             if msg.role == "tool":
                 # Tool result message - format for OpenAI chat completions
-                formatted_messages.append({
-                    "role": "tool",
-                    "content": str(msg.content),
-                    "tool_call_id": msg.tool_call_id,
-                })
+                formatted_messages.append(
+                    {
+                        "role": "tool",
+                        "content": str(msg.content),
+                        "tool_call_id": msg.tool_call_id,
+                    }
+                )
             elif msg.role == "assistant" and msg.tool_calls:
                 # Assistant message with tool calls
                 tool_calls_formatted = [
@@ -154,15 +156,17 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
                         "function": {
                             "name": tool_call.name,
                             "arguments": tool_call.arguments,
-                        }
+                        },
                     }
                     for tool_call in msg.tool_calls
                 ]
-                formatted_messages.append({
-                    "role": "assistant",
-                    "content": msg.content,
-                    "tool_calls": tool_calls_formatted,
-                })
+                formatted_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": msg.content,
+                        "tool_calls": tool_calls_formatted,
+                    }
+                )
             else:
                 # Regular message - convert to standard format
                 formatted_messages.append(msg.model_dump(exclude_none=True))
@@ -178,7 +182,7 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
                     "name": tool.name,
                     "description": tool.description,
                     "parameters": tool.parameters.model_dump() if tool.parameters else {},
-                }
+                },
             }
             for tool in tools
         ]
@@ -195,11 +199,7 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         tools_param = NOT_GIVEN if tools is None else tools
 
         return self.client.chat.completions.create(
-            model=model, 
-            messages=messages, 
-            stream=stream, 
-            tools=tools_param, 
-            **kwargs
+            model=model, messages=messages, stream=stream, tools=tools_param, **kwargs
         )
 
     def _process_provider_stream_event(
@@ -215,9 +215,7 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         # Handle content deltas
         if delta.content:
             return create_stream_chunk(
-                native_event=event, 
-                processor=processor, 
-                content_delta=delta.content
+                native_event=event, processor=processor, content_delta=delta.content
             )
 
         # Handle tool call deltas
@@ -228,20 +226,20 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
                     processor.process_tool_call_start(
                         tool_call_delta.id,
                         tool_call_delta.function.name if tool_call_delta.function else "",
-                        tool_call_delta.id
+                        tool_call_delta.id,
                     )
                 elif tool_call_delta.function and tool_call_delta.function.arguments:
                     # Tool call arguments delta - need the tool call ID from index
                     # For OpenAI streaming, we track by index
                     tool_call_id = f"call_{tool_call_delta.index}"
-                    processor.process_tool_call_delta(tool_call_id, tool_call_delta.function.arguments)
+                    processor.process_tool_call_delta(
+                        tool_call_id, tool_call_delta.function.arguments
+                    )
 
         # Handle completion
         if choice.finish_reason:
             return create_stream_chunk(
-                native_event=event, 
-                processor=processor, 
-                finish_reason=choice.finish_reason
+                native_event=event, processor=processor, finish_reason=choice.finish_reason
             )
 
         return None
@@ -261,7 +259,7 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         """Extracts content from OpenRouter response."""
         if not response.choices:
             return ""
-        
+
         choice = response.choices[0]
         return choice.message.content or ""
 
@@ -302,21 +300,23 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         if isinstance(assistant_response, ChatCompletion) and assistant_response.choices:
             choice = assistant_response.choices[0]
             if choice.message.tool_calls:
-                updated_messages.append({
-                    "role": "assistant",
-                    "content": choice.message.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
+                updated_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": choice.message.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
                             }
-                        }
-                        for tc in choice.message.tool_calls
-                    ]
-                })
+                            for tc in choice.message.tool_calls
+                        ],
+                    }
+                )
         else:
             # For streaming responses, reconstruct the assistant message
             tool_calls_formatted = [
@@ -326,23 +326,27 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
                     "function": {
                         "name": tool_call.name,
                         "arguments": tool_call.arguments,
-                    }
+                    },
                 }
                 for tool_call in tool_calls
             ]
-            updated_messages.append({
-                "role": "assistant",
-                "content": None,
-                "tool_calls": tool_calls_formatted,
-            })
+            updated_messages.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": tool_calls_formatted,
+                }
+            )
 
         # Add the tool result messages
         for result in tool_results:
-            updated_messages.append({
-                "role": "tool",
-                "content": result.result if not result.is_error else f"Error: {result.error}",
-                "tool_call_id": result.call_id,
-            })
+            updated_messages.append(
+                {
+                    "role": "tool",
+                    "content": result.result if not result.is_error else f"Error: {result.error}",
+                    "tool_call_id": result.call_id,
+                }
+            )
 
         return updated_messages
 
@@ -450,7 +454,7 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
 
     async def _list_models_impl(self) -> list[ModelSummary]:
         """Lists available models from the OpenRouter API asynchronously.
-        
+
         Returns:
             A list of ModelSummary objects containing model information
             from OpenRouter's model registry.
@@ -458,11 +462,11 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         models_response = await self._async_client.models.list()
         return [
             ModelSummary(
-                id=model.id, 
+                id=model.id,
                 name=getattr(model, "name", model.id),
                 owned_by=getattr(model, "owned_by", "openrouter"),
                 created_at=getattr(model, "created", None),
-                metadata=model.__dict__ if hasattr(model, "__dict__") else {}
+                metadata=model.__dict__ if hasattr(model, "__dict__") else {},
             )
             for model in models_response
         ]
@@ -476,11 +480,13 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         for msg in messages:
             if msg.role == "tool":
                 # Tool result message - format for OpenAI chat completions
-                formatted_messages.append({
-                    "role": "tool",
-                    "content": str(msg.content),
-                    "tool_call_id": msg.tool_call_id,
-                })
+                formatted_messages.append(
+                    {
+                        "role": "tool",
+                        "content": str(msg.content),
+                        "tool_call_id": msg.tool_call_id,
+                    }
+                )
             elif msg.role == "assistant" and msg.tool_calls:
                 # Assistant message with tool calls
                 tool_calls_formatted = [
@@ -490,15 +496,17 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
                         "function": {
                             "name": tool_call.name,
                             "arguments": tool_call.arguments,
-                        }
+                        },
                     }
                     for tool_call in msg.tool_calls
                 ]
-                formatted_messages.append({
-                    "role": "assistant",
-                    "content": msg.content,
-                    "tool_calls": tool_calls_formatted,
-                })
+                formatted_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": msg.content,
+                        "tool_calls": tool_calls_formatted,
+                    }
+                )
             else:
                 # Regular message - convert to standard format
                 formatted_messages.append(msg.model_dump(exclude_none=True))
@@ -514,7 +522,7 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
                     "name": tool.name,
                     "description": tool.description,
                     "parameters": tool.parameters.model_dump() if tool.parameters else {},
-                }
+                },
             }
             for tool in tools
         ]
@@ -531,11 +539,7 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         tools_param = NOT_GIVEN if tools is None else tools
 
         return await self._async_client.chat.completions.create(
-            model=model, 
-            messages=messages, 
-            stream=stream, 
-            tools=tools_param, 
-            **kwargs
+            model=model, messages=messages, stream=stream, tools=tools_param, **kwargs
         )
 
     def _process_provider_stream_event(
@@ -551,9 +555,7 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         # Handle content deltas
         if delta.content:
             return create_stream_chunk(
-                native_event=event, 
-                processor=processor, 
-                content_delta=delta.content
+                native_event=event, processor=processor, content_delta=delta.content
             )
 
         # Handle tool call deltas
@@ -564,20 +566,20 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
                     processor.process_tool_call_start(
                         tool_call_delta.id,
                         tool_call_delta.function.name if tool_call_delta.function else "",
-                        tool_call_delta.id
+                        tool_call_delta.id,
                     )
                 elif tool_call_delta.function and tool_call_delta.function.arguments:
                     # Tool call arguments delta - need the tool call ID from index
                     # For OpenAI streaming, we track by index
                     tool_call_id = f"call_{tool_call_delta.index}"
-                    processor.process_tool_call_delta(tool_call_id, tool_call_delta.function.arguments)
+                    processor.process_tool_call_delta(
+                        tool_call_id, tool_call_delta.function.arguments
+                    )
 
         # Handle completion
         if choice.finish_reason:
             return create_stream_chunk(
-                native_event=event, 
-                processor=processor, 
-                finish_reason=choice.finish_reason
+                native_event=event, processor=processor, finish_reason=choice.finish_reason
             )
 
         return None
@@ -597,7 +599,7 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         """Extracts content from OpenRouter response."""
         if not response.choices:
             return ""
-        
+
         choice = response.choices[0]
         return choice.message.content or ""
 
@@ -638,21 +640,23 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
         if isinstance(assistant_response, ChatCompletion) and assistant_response.choices:
             choice = assistant_response.choices[0]
             if choice.message.tool_calls:
-                updated_messages.append({
-                    "role": "assistant",
-                    "content": choice.message.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
+                updated_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": choice.message.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
                             }
-                        }
-                        for tc in choice.message.tool_calls
-                    ]
-                })
+                            for tc in choice.message.tool_calls
+                        ],
+                    }
+                )
         else:
             # For streaming responses, reconstruct the assistant message
             tool_calls_formatted = [
@@ -662,22 +666,26 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
                     "function": {
                         "name": tool_call.name,
                         "arguments": tool_call.arguments,
-                    }
+                    },
                 }
                 for tool_call in tool_calls
             ]
-            updated_messages.append({
-                "role": "assistant",
-                "content": None,
-                "tool_calls": tool_calls_formatted,
-            })
+            updated_messages.append(
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": tool_calls_formatted,
+                }
+            )
 
         # Add the tool result messages
         for result in tool_results:
-            updated_messages.append({
-                "role": "tool",
-                "content": result.result if not result.is_error else f"Error: {result.error}",
-                "tool_call_id": result.call_id,
-            })
+            updated_messages.append(
+                {
+                    "role": "tool",
+                    "content": result.result if not result.is_error else f"Error: {result.error}",
+                    "tool_call_id": result.call_id,
+                }
+            )
 
         return updated_messages

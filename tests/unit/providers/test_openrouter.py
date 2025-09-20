@@ -19,19 +19,19 @@ class TestOpenRouterClient(BaseProviderTestSuite):
     def sample_response(self):
         """Create a sample OpenRouter response."""
         response = Mock(spec=ChatCompletion)
-        
+
         # Mock the choice
         choice = Mock()
         choice.message = Mock()
         choice.message.content = "Hello there"
         choice.message.tool_calls = None
         choice.finish_reason = "stop"
-        
+
         response.choices = [choice]
         response.usage = Mock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
         response.model = "openai/gpt-4o-mini"
         response.id = "chatcmpl-123"
-        
+
         return response
 
     @property
@@ -101,10 +101,10 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path) as mock_openai:
             client = self.client_class(
-                api_key="test-key", 
-                tool_manager=tool_manager, 
+                api_key="test-key",
+                tool_manager=tool_manager,
                 timeout=30,
-                default_headers={"X-Title": "Test"}
+                default_headers={"X-Title": "Test"},
             )
 
             assert client.api_key == "test-key"
@@ -112,10 +112,10 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             assert client._provider_name == self.provider_name
             # Should be called with OpenRouter base URL
             mock_openai.assert_called_once_with(
-                api_key="test-key", 
+                api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
                 timeout=30,
-                default_headers={"X-Title": "Test"}
+                default_headers={"X-Title": "Test"},
             )
 
     def test_client_initialization_custom_base_url(self):
@@ -123,16 +123,15 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         tool_manager = self.create_tool_manager()
 
         with patch(self.mock_client_path) as mock_openai:
-            client = self.client_class(
-                api_key="test-key", 
+            self.client_class(
+                api_key="test-key",
                 tool_manager=tool_manager,
-                base_url="https://custom.openrouter.ai/api/v1"
+                base_url="https://custom.openrouter.ai/api/v1",
             )
-            
+
             # Should use the custom base URL
             mock_openai.assert_called_once_with(
-                api_key="test-key", 
-                base_url="https://custom.openrouter.ai/api/v1"
+                api_key="test-key", base_url="https://custom.openrouter.ai/api/v1"
             )
 
     # ===== Capability Tests =====
@@ -182,14 +181,14 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             messages = [
                 Message(role="system", content="You are helpful"),
                 Message(role="user", content="Hello"),
             ]
-            
+
             formatted = client._messages_to_provider_format(messages)
-            
+
             assert len(formatted) == 2
             assert formatted[0]["role"] == "system"
             assert formatted[0]["content"] == "You are helpful"
@@ -202,14 +201,12 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             tool_call = ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')
-            messages = [
-                Message(role="assistant", content="I'll help you", tool_calls=[tool_call])
-            ]
-            
+            messages = [Message(role="assistant", content="I'll help you", tool_calls=[tool_call])]
+
             formatted = client._messages_to_provider_format(messages)
-            
+
             assert len(formatted) == 1
             assert formatted[0]["role"] == "assistant"
             assert formatted[0]["content"] == "I'll help you"
@@ -223,13 +220,11 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
-            messages = [
-                Message(role="tool", content="Result: 42", tool_call_id="call_123")
-            ]
-            
+
+            messages = [Message(role="tool", content="Result: 42", tool_call_id="call_123")]
+
             formatted = client._messages_to_provider_format(messages)
-            
+
             assert len(formatted) == 1
             assert formatted[0]["role"] == "tool"
             assert formatted[0]["content"] == "Result: 42"
@@ -243,18 +238,14 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             tool_params = ToolParameters(
-                type="object",
-                properties={"x": {"type": "integer"}},
-                required=["x"]
+                type="object", properties={"x": {"type": "integer"}}, required=["x"]
             )
-            tools = [
-                Tool(name="test_tool", description="A test tool", parameters=tool_params)
-            ]
-            
+            tools = [Tool(name="test_tool", description="A test tool", parameters=tool_params)]
+
             formatted = client._tools_to_provider_format(tools)
-            
+
             assert len(formatted) == 1
             assert formatted[0]["type"] == "function"
             assert formatted[0]["function"]["name"] == "test_tool"
@@ -270,26 +261,26 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         with patch(self.mock_client_path) as mock_openai:
             mock_client = MagicMock()
             mock_openai.return_value = mock_client
-            
+
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             messages = [{"role": "user", "content": "Hello"}]
             tools = [{"type": "function", "function": {"name": "test"}}]
-            
+
             client._make_provider_request(
                 messages=messages,
                 model="openai/gpt-4o-mini",
                 stream=False,
                 tools=tools,
-                temperature=0.7
+                temperature=0.7,
             )
-            
+
             mock_client.chat.completions.create.assert_called_once_with(
                 model="openai/gpt-4o-mini",
                 messages=messages,
                 stream=False,
                 tools=tools,
-                temperature=0.7
+                temperature=0.7,
             )
 
     # ===== Response Extraction Tests =====
@@ -300,10 +291,10 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             response = self.sample_response
             usage = client._extract_usage_from_response(response)
-            
+
             assert usage.prompt_tokens == 10
             assert usage.completion_tokens == 20
             assert usage.total_tokens == 30
@@ -314,10 +305,10 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             response = self.sample_response
             content = client._extract_content_from_response(response)
-            
+
             assert content == "Hello there"
 
     def test_extract_tool_calls_from_response(self):
@@ -326,7 +317,7 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             response = Mock(spec=ChatCompletion)
             choice = Mock()
             choice.message = Mock()
@@ -337,9 +328,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             tool_call.function.arguments = '{"x": 10}'
             choice.message.tool_calls = [tool_call]
             response.choices = [choice]
-            
+
             tool_calls = client._extract_tool_calls_from_response(response)
-            
+
             assert tool_calls is not None
             assert len(tool_calls) == 1
             assert tool_calls[0].call_id == "call_123"
@@ -355,7 +346,7 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
             processor = StreamProcessor()
-            
+
             chunk = Mock(spec=ChatCompletionChunk)
             choice = Mock()
             choice.delta = Mock()
@@ -363,9 +354,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             choice.delta.tool_calls = None
             choice.finish_reason = None
             chunk.choices = [choice]
-            
+
             result = client._process_provider_stream_event(chunk, processor)
-            
+
             assert result is not None
             assert result.common.content == "Hello"
 
@@ -376,12 +367,12 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
             processor = StreamProcessor()
-            
+
             chunk = Mock(spec=ChatCompletionChunk)
             chunk.choices = []
-            
+
             result = client._process_provider_stream_event(chunk, processor)
-            
+
             assert result is None
 
     def test_process_provider_stream_event_tool_call(self):
@@ -391,7 +382,7 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
             processor = StreamProcessor()
-            
+
             chunk = Mock(spec=ChatCompletionChunk)
             choice = Mock()
             choice.delta = Mock()
@@ -405,10 +396,10 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             choice.delta.tool_calls = [tool_call_delta]
             choice.finish_reason = None
             chunk.choices = [choice]
-            
+
             result = client._process_provider_stream_event(chunk, processor)
-            
-            # Tool call start events don't return chunks immediately, 
+
+            # Tool call start events don't return chunks immediately,
             # they just update the processor state
             assert result is None
 
@@ -419,7 +410,7 @@ class TestOpenRouterClient(BaseProviderTestSuite):
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
             processor = StreamProcessor()
-            
+
             chunk = Mock(spec=ChatCompletionChunk)
             choice = Mock()
             choice.delta = Mock()
@@ -427,9 +418,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             choice.delta.tool_calls = None
             choice.finish_reason = "stop"
             chunk.choices = [choice]
-            
+
             result = client._process_provider_stream_event(chunk, processor)
-            
+
             assert result is not None
             assert result.common.finish_reason == "stop"
 
@@ -439,9 +430,9 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             messages = [{"role": "user", "content": "Hello"}]
-            
+
             # Create a response with tool calls
             response = Mock(spec=ChatCompletion)
             choice = Mock()
@@ -454,12 +445,18 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             tool_call.function.arguments = '{"x": 10}'
             choice.message.tool_calls = [tool_call]
             response.choices = [choice]
-            
+
             tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
-            tool_results = [ToolExecutionResult(call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10")]
-            
-            updated = client._update_messages_with_tool_calls(messages, response, tool_calls, tool_results)
-            
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
             assert len(updated) == 3  # original + assistant + tool result
             assert updated[1]["role"] == "assistant"
             assert updated[1]["content"] == "I'll help with that calculation"
@@ -472,15 +469,15 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             response = Mock(spec=ChatCompletion)
             choice = Mock()
             choice.message = Mock()
             choice.message.tool_calls = None
             response.choices = [choice]
-            
+
             tool_calls = client._extract_tool_calls_from_response(response)
-            
+
             assert tool_calls is None
 
     def test_extract_tool_calls_from_response_empty_choices_sync(self):
@@ -489,12 +486,12 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             response = Mock(spec=ChatCompletion)
             response.choices = []
-            
+
             tool_calls = client._extract_tool_calls_from_response(response)
-            
+
             assert tool_calls is None
 
 
@@ -509,18 +506,18 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
     def sample_response(self):
         """Create a sample OpenRouter response."""
         response = Mock(spec=ChatCompletion)
-        
+
         choice = Mock()
         choice.message = Mock()
         choice.message.content = "Hello there"
         choice.message.tool_calls = None
         choice.finish_reason = "stop"
-        
+
         response.choices = [choice]
         response.usage = Mock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
         response.model = "openai/gpt-4o-mini"
         response.id = "chatcmpl-123"
-        
+
         return response
 
     @property
@@ -546,16 +543,12 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
         tool_manager = self.create_tool_manager()
 
         with patch(self.mock_client_path) as mock_async_openai:
-            client = self.client_class(
-                api_key="test-key", 
-                tool_manager=tool_manager
-            )
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
 
             assert client.api_key == "test-key"
             assert client._provider_name == self.provider_name
             mock_async_openai.assert_called_once_with(
-                api_key="test-key", 
-                base_url="https://openrouter.ai/api/v1"
+                api_key="test-key", base_url="https://openrouter.ai/api/v1"
             )
 
     def test_async_list_models(self):
@@ -574,15 +567,16 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
             mock_client.models.list.return_value = [mock_model]
 
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             import asyncio
+
             async def test():
                 models = await client._list_models_impl()
                 assert len(models) == 1
                 assert models[0].id == "openai/gpt-4o-mini"
                 assert models[0].name == "GPT-4o Mini"
                 assert models[0].owned_by == "openai"
-            
+
             asyncio.run(test())
 
     def test_async_make_provider_request(self):
@@ -594,19 +588,21 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
             mock_async_openai.return_value = mock_client
 
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-            
+
             import asyncio
+
             async def test():
                 await client._make_async_provider_request(
                     messages=[{"role": "user", "content": "Hello"}],
                     model="openai/gpt-4o-mini",
                     stream=False,
-                    tools=None
+                    tools=None,
                 )
-                
+
                 mock_client.chat.completions.create.assert_called_once()
                 _, kwargs = mock_client.chat.completions.create.call_args
                 from openai import NOT_GIVEN
+
                 assert kwargs.get("tools") == NOT_GIVEN
-            
+
             asyncio.run(test())
