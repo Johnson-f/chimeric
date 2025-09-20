@@ -252,7 +252,7 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             assert formatted[0]["function"]["description"] == "A test tool"
             assert formatted[0]["function"]["parameters"]["type"] == "object"
 
-    # ===== Provider Request Tests =====
+    # ===== API Request Tests =====
 
     def test_make_provider_request(self):
         """Test making provider request."""
@@ -282,60 +282,6 @@ class TestOpenRouterClient(BaseProviderTestSuite):
                 tools=tools,
                 temperature=0.7,
             )
-
-    # ===== Response Extraction Tests =====
-
-    def test_extract_usage_from_response(self):
-        """Test usage extraction from response."""
-        tool_manager = self.create_tool_manager()
-
-        with patch(self.mock_client_path):
-            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-
-            response = self.sample_response
-            usage = client._extract_usage_from_response(response)
-
-            assert usage.prompt_tokens == 10
-            assert usage.completion_tokens == 20
-            assert usage.total_tokens == 30
-
-    def test_extract_content_from_response(self):
-        """Test content extraction from response."""
-        tool_manager = self.create_tool_manager()
-
-        with patch(self.mock_client_path):
-            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-
-            response = self.sample_response
-            content = client._extract_content_from_response(response)
-
-            assert content == "Hello there"
-
-    def test_extract_tool_calls_from_response(self):
-        """Test tool call extraction from response."""
-        tool_manager = self.create_tool_manager()
-
-        with patch(self.mock_client_path):
-            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
-
-            response = Mock(spec=ChatCompletion)
-            choice = Mock()
-            choice.message = Mock()
-            tool_call = Mock()
-            tool_call.id = "call_123"
-            tool_call.function = Mock()
-            tool_call.function.name = "test_tool"
-            tool_call.function.arguments = '{"x": 10}'
-            choice.message.tool_calls = [tool_call]
-            response.choices = [choice]
-
-            tool_calls = client._extract_tool_calls_from_response(response)
-
-            assert tool_calls is not None
-            assert len(tool_calls) == 1
-            assert tool_calls[0].call_id == "call_123"
-            assert tool_calls[0].name == "test_tool"
-            assert tool_calls[0].arguments == '{"x": 10}'
 
     # ===== Stream Processing Tests =====
 
@@ -403,6 +349,86 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             # they just update the processor state
             assert result is None
 
+    def test_process_provider_stream_event_tool_call_arguments(self):
+        """Test processing stream event with tool call arguments only."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            # First, add a tool call to the processor
+            processor.process_tool_call_start("call_123", "test_tool", "call_123")
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = None  # No ID, just arguments
+            tool_call_delta.function = Mock()
+            tool_call_delta.function.name = None
+            tool_call_delta.function.arguments = '{"x": 10}'
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Tool call argument events don't return chunks immediately
+            assert result is None
+
+    def test_process_provider_stream_event_tool_call_no_function(self):
+        """Test processing stream event with tool call but no function."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = "call_123"
+            tool_call_delta.function = None  # No function
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Tool call start events don't return chunks immediately
+            assert result is None
+
+    def test_process_provider_stream_event_tool_call_with_arguments_no_function(self):
+        """Test processing stream event with tool call arguments but no function."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = None  # No ID
+            tool_call_delta.function = None  # No function either
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Should not process anything and return None
+            assert result is None
+
     def test_process_provider_stream_event_finish(self):
         """Test processing stream event with finish reason."""
         tool_manager = self.create_tool_manager()
@@ -423,6 +449,140 @@ class TestOpenRouterClient(BaseProviderTestSuite):
 
             assert result is not None
             assert result.common.finish_reason == "stop"
+
+    # ===== Response Extraction Tests =====
+
+    def test_extract_usage_from_response(self):
+        """Test usage extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = self.sample_response
+            usage = client._extract_usage_from_response(response)
+
+            assert usage.prompt_tokens == 10
+            assert usage.completion_tokens == 20
+            assert usage.total_tokens == 30
+
+    def test_extract_usage_from_response_no_usage(self):
+        """Test usage extraction when response has no usage."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.usage = None
+
+            usage = client._extract_usage_from_response(response)
+
+            assert usage.prompt_tokens == 0
+            assert usage.completion_tokens == 0
+            assert usage.total_tokens == 0
+
+    def test_extract_content_from_response(self):
+        """Test content extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = self.sample_response
+            content = client._extract_content_from_response(response)
+
+            assert content == "Hello there"
+
+    def test_extract_content_from_response_empty_choices(self):
+        """Test content extraction when response has no choices."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.choices = []
+
+            content = client._extract_content_from_response(response)
+
+            assert content == ""
+
+    def test_extract_content_from_response_none_content(self):
+        """Test content extraction when message content is None."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = None
+            response.choices = [choice]
+
+            content = client._extract_content_from_response(response)
+
+            assert content == ""
+
+    def test_extract_tool_calls_from_response(self):
+        """Test tool call extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
+            response.choices = [choice]
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is not None
+            assert len(tool_calls) == 1
+            assert tool_calls[0].call_id == "call_123"
+            assert tool_calls[0].name == "test_tool"
+            assert tool_calls[0].arguments == '{"x": 10}'
+
+    def test_extract_tool_calls_from_response_no_tool_calls(self):
+        """Test tool call extraction when no tool calls present."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.tool_calls = None
+            response.choices = [choice]
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is None
+
+    def test_extract_tool_calls_from_response_empty_choices(self):
+        """Test tool call extraction with empty choices."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.choices = []
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is None
+
+    # ===== Message Update Tests =====
 
     def test_update_messages_with_tool_calls(self):
         """Test updating messages with tool calls and results."""
@@ -463,36 +623,140 @@ class TestOpenRouterClient(BaseProviderTestSuite):
             assert updated[2]["role"] == "tool"
             assert updated[2]["tool_call_id"] == "call_123"
 
-    def test_extract_tool_calls_from_response_no_tool_calls_sync(self):
-        """Test tool call extraction when no tool calls present."""
+    def test_update_messages_with_tool_calls_stream_response(self):
+        """Test updating messages with tool calls for streaming response."""
         tool_manager = self.create_tool_manager()
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
 
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a streaming response (not ChatCompletion)
+            stream_event = Mock(spec=ChatCompletionChunk)
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, stream_event, tool_calls, tool_results
+            )
+
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] is None  # None for streaming
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
+
+    def test_update_messages_with_tool_calls_error_result(self):
+        """Test updating messages with tool calls when tool execution fails."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a response with tool calls
             response = Mock(spec=ChatCompletion)
             choice = Mock()
             choice.message = Mock()
-            choice.message.tool_calls = None
+            choice.message.content = "I'll help with that calculation"
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
             response.choices = [choice]
 
-            tool_calls = client._extract_tool_calls_from_response(response)
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123",
+                    name="test_tool",
+                    arguments='{"x": 10}',
+                    error="Tool failed",
+                    is_error=True
+                )
+            ]
 
-            assert tool_calls is None
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
 
-    def test_extract_tool_calls_from_response_empty_choices_sync(self):
-        """Test tool call extraction with empty choices."""
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["content"] == "Error: Tool failed"
+            assert updated[2]["tool_call_id"] == "call_123"
+
+    def test_update_messages_with_tool_calls_response_no_tool_calls(self):
+        """Test updating messages when response has no tool calls."""
         tool_manager = self.create_tool_manager()
 
         with patch(self.mock_client_path):
             client = self.client_class(api_key="test-key", tool_manager=tool_manager)
 
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a ChatCompletion response without tool calls
             response = Mock(spec=ChatCompletion)
-            response.choices = []
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = "I'll help with that calculation"
+            choice.message.tool_calls = None  # No tool calls
+            response.choices = [choice]
 
-            tool_calls = client._extract_tool_calls_from_response(response)
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
 
-            assert tool_calls is None
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            # When ChatCompletion response has no tool calls, the condition at line 302 fails
+            # so no assistant message is added, only tool results
+            assert len(updated) == 2  # original + tool result only
+            assert updated[1]["role"] == "tool"
+            assert updated[1]["tool_call_id"] == "call_123"
+
+    def test_update_messages_with_tool_calls_non_completion_response(self):
+        """Test updating messages with non-ChatCompletion response (else branch)."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a non-ChatCompletion response (e.g., streaming chunk)
+            response = Mock(spec=ChatCompletionChunk)  # Not ChatCompletion
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            # Should go to else branch and add assistant message + tool results
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] is None  # None for streaming
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
 
 
 class TestOpenRouterAsyncClient(BaseProviderTestSuite):
@@ -536,7 +800,7 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
 
         return events
 
-    # ===== Basic Async Tests =====
+    # ===== Async Initialization Tests =====
 
     def test_async_client_initialization(self):
         """Test async client initialization."""
@@ -550,6 +814,38 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
             mock_async_openai.assert_called_once_with(
                 api_key="test-key", base_url="https://openrouter.ai/api/v1"
             )
+
+    def test_async_client_initialization_custom_base_url(self):
+        """Test async client initialization with custom base URL."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path) as mock_async_openai:
+            self.client_class(
+                api_key="test-key",
+                tool_manager=tool_manager,
+                base_url="https://custom.openrouter.ai/api/v1",
+            )
+
+            # Should use the custom base URL
+            mock_async_openai.assert_called_once_with(
+                api_key="test-key", base_url="https://custom.openrouter.ai/api/v1"
+            )
+
+    # ===== Async Capability Tests =====
+
+    def test_async_capabilities(self):
+        """Test async provider capabilities."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            capabilities = client._get_capabilities()
+
+            assert isinstance(capabilities, Capability)
+            assert capabilities.streaming is True
+            assert capabilities.tools is True
+
+    # ===== Async Model Listing Tests =====
 
     def test_async_list_models(self):
         """Test async model listing."""
@@ -579,6 +875,87 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
 
             asyncio.run(test())
 
+    # ===== Async Message Formatting Tests =====
+
+    def test_async_messages_to_provider_format_basic(self):
+        """Test async basic message formatting."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [
+                Message(role="system", content="You are helpful"),
+                Message(role="user", content="Hello"),
+            ]
+
+            formatted = client._messages_to_provider_format(messages)
+
+            assert len(formatted) == 2
+            assert formatted[0]["role"] == "system"
+            assert formatted[0]["content"] == "You are helpful"
+            assert formatted[1]["role"] == "user"
+            assert formatted[1]["content"] == "Hello"
+
+    def test_async_messages_to_provider_format_with_tool_calls(self):
+        """Test async message formatting with tool calls."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            tool_call = ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')
+            messages = [Message(role="assistant", content="I'll help you", tool_calls=[tool_call])]
+
+            formatted = client._messages_to_provider_format(messages)
+
+            assert len(formatted) == 1
+            assert formatted[0]["role"] == "assistant"
+            assert formatted[0]["content"] == "I'll help you"
+            assert len(formatted[0]["tool_calls"]) == 1
+            assert formatted[0]["tool_calls"][0]["id"] == "call_123"
+            assert formatted[0]["tool_calls"][0]["function"]["name"] == "test_tool"
+
+    def test_async_messages_to_provider_format_tool_result(self):
+        """Test async message formatting with tool result."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [Message(role="tool", content="Result: 42", tool_call_id="call_123")]
+
+            formatted = client._messages_to_provider_format(messages)
+
+            assert len(formatted) == 1
+            assert formatted[0]["role"] == "tool"
+            assert formatted[0]["content"] == "Result: 42"
+            assert formatted[0]["tool_call_id"] == "call_123"
+
+    # ===== Async Tool Formatting Tests =====
+
+    def test_async_tools_to_provider_format(self):
+        """Test async tool formatting."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            tool_params = ToolParameters(
+                type="object", properties={"x": {"type": "integer"}}, required=["x"]
+            )
+            tools = [Tool(name="test_tool", description="A test tool", parameters=tool_params)]
+
+            formatted = client._tools_to_provider_format(tools)
+
+            assert len(formatted) == 1
+            assert formatted[0]["type"] == "function"
+            assert formatted[0]["function"]["name"] == "test_tool"
+            assert formatted[0]["function"]["description"] == "A test tool"
+            assert formatted[0]["function"]["parameters"]["type"] == "object"
+
+    # ===== Async API Request Tests =====
+
     def test_async_make_provider_request(self):
         """Test async provider request."""
         tool_manager = self.create_tool_manager()
@@ -606,3 +983,477 @@ class TestOpenRouterAsyncClient(BaseProviderTestSuite):
                 assert kwargs.get("tools") == NOT_GIVEN
 
             asyncio.run(test())
+
+    # ===== Async Stream Processing Tests =====
+
+    def test_async_process_provider_stream_event_content(self):
+        """Test async processing stream event with content."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = "Hello"
+            choice.delta.tool_calls = None
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            assert result is not None
+            assert result.common.content == "Hello"
+
+    def test_async_process_provider_stream_event_no_choices(self):
+        """Test async processing stream event with no choices."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            chunk.choices = []
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            assert result is None
+
+    def test_async_process_provider_stream_event_tool_call(self):
+        """Test async processing stream event with tool call."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = "call_123"
+            tool_call_delta.function = Mock()
+            tool_call_delta.function.name = "test_tool"
+            tool_call_delta.function.arguments = None
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Tool call start events don't return chunks immediately
+            assert result is None
+
+    def test_async_process_provider_stream_event_tool_call_arguments(self):
+        """Test async processing stream event with tool call arguments only."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            # First, add a tool call to the processor
+            processor.process_tool_call_start("call_123", "test_tool", "call_123")
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = None  # No ID, just arguments
+            tool_call_delta.function = Mock()
+            tool_call_delta.function.name = None
+            tool_call_delta.function.arguments = '{"x": 10}'
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Tool call argument events don't return chunks immediately
+            assert result is None
+
+    def test_async_process_provider_stream_event_tool_call_no_function(self):
+        """Test async processing stream event with tool call but no function."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = "call_123"
+            tool_call_delta.function = None  # No function
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Tool call start events don't return chunks immediately
+            assert result is None
+
+    def test_async_process_provider_stream_event_tool_call_with_arguments_no_function(self):
+        """Test async processing stream event with tool call arguments but no function."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            tool_call_delta = Mock()
+            tool_call_delta.id = None  # No ID
+            tool_call_delta.function = None  # No function either
+            tool_call_delta.index = 0
+            choice.delta.tool_calls = [tool_call_delta]
+            choice.finish_reason = None
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            # Should not process anything and return None
+            assert result is None
+
+    def test_async_process_provider_stream_event_finish(self):
+        """Test async processing stream event with finish reason."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+            processor = StreamProcessor()
+
+            chunk = Mock(spec=ChatCompletionChunk)
+            choice = Mock()
+            choice.delta = Mock()
+            choice.delta.content = None
+            choice.delta.tool_calls = None
+            choice.finish_reason = "stop"
+            chunk.choices = [choice]
+
+            result = client._process_provider_stream_event(chunk, processor)
+
+            assert result is not None
+            assert result.common.finish_reason == "stop"
+
+    # ===== Async Response Extraction Tests =====
+
+    def test_async_extract_usage_from_response(self):
+        """Test async usage extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = self.sample_response
+            usage = client._extract_usage_from_response(response)
+
+            assert usage.prompt_tokens == 10
+            assert usage.completion_tokens == 20
+            assert usage.total_tokens == 30
+
+    def test_async_extract_usage_from_response_no_usage(self):
+        """Test async usage extraction when response has no usage."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.usage = None
+
+            usage = client._extract_usage_from_response(response)
+
+            assert usage.prompt_tokens == 0
+            assert usage.completion_tokens == 0
+            assert usage.total_tokens == 0
+
+    def test_async_extract_content_from_response(self):
+        """Test async content extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = self.sample_response
+            content = client._extract_content_from_response(response)
+
+            assert content == "Hello there"
+
+    def test_async_extract_content_from_response_empty_choices(self):
+        """Test async content extraction when response has no choices."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.choices = []
+
+            content = client._extract_content_from_response(response)
+
+            assert content == ""
+
+    def test_async_extract_content_from_response_none_content(self):
+        """Test async content extraction when message content is None."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = None
+            response.choices = [choice]
+
+            content = client._extract_content_from_response(response)
+
+            assert content == ""
+
+    def test_async_extract_tool_calls_from_response(self):
+        """Test async tool call extraction from response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
+            response.choices = [choice]
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is not None
+            assert len(tool_calls) == 1
+            assert tool_calls[0].call_id == "call_123"
+            assert tool_calls[0].name == "test_tool"
+            assert tool_calls[0].arguments == '{"x": 10}'
+
+    def test_async_extract_tool_calls_from_response_no_tool_calls(self):
+        """Test async tool call extraction when no tool calls present."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.tool_calls = None
+            response.choices = [choice]
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is None
+
+    def test_async_extract_tool_calls_from_response_empty_choices(self):
+        """Test async tool call extraction with empty choices."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            response = Mock(spec=ChatCompletion)
+            response.choices = []
+
+            tool_calls = client._extract_tool_calls_from_response(response)
+
+            assert tool_calls is None
+
+    # ===== Async Message Update Tests =====
+
+    def test_async_update_messages_with_tool_calls(self):
+        """Test async updating messages with tool calls and results."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a response with tool calls
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = "I'll help with that calculation"
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
+            response.choices = [choice]
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] == "I'll help with that calculation"
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
+
+    def test_async_update_messages_with_tool_calls_stream_response(self):
+        """Test async updating messages with tool calls for streaming response."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a streaming response (not ChatCompletion)
+            stream_event = Mock(spec=ChatCompletionChunk)
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, stream_event, tool_calls, tool_results
+            )
+
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] is None  # None for streaming
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
+
+    def test_async_update_messages_with_tool_calls_error_result(self):
+        """Test async updating messages with tool calls when tool execution fails."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a response with tool calls
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = "I'll help with that calculation"
+            tool_call = Mock()
+            tool_call.id = "call_123"
+            tool_call.function = Mock()
+            tool_call.function.name = "test_tool"
+            tool_call.function.arguments = '{"x": 10}'
+            choice.message.tool_calls = [tool_call]
+            response.choices = [choice]
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123",
+                    name="test_tool",
+                    arguments='{"x": 10}',
+                    error="Tool failed",
+                    is_error=True
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["content"] == "Error: Tool failed"
+            assert updated[2]["tool_call_id"] == "call_123"
+
+    def test_async_update_messages_with_tool_calls_response_no_tool_calls(self):
+        """Test async updating messages when response has no tool calls."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a ChatCompletion response without tool calls
+            response = Mock(spec=ChatCompletion)
+            choice = Mock()
+            choice.message = Mock()
+            choice.message.content = "I'll help with that calculation"
+            choice.message.tool_calls = None  # No tool calls
+            response.choices = [choice]
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            # When ChatCompletion response has no tool calls, the condition fails
+            # so no assistant message is added, only tool results
+            assert len(updated) == 2  # original + tool result only
+            assert updated[1]["role"] == "tool"
+            assert updated[1]["tool_call_id"] == "call_123"
+
+    def test_async_update_messages_with_tool_calls_non_completion_response(self):
+        """Test async updating messages with non-ChatCompletion response (else branch)."""
+        tool_manager = self.create_tool_manager()
+
+        with patch(self.mock_client_path):
+            client = self.client_class(api_key="test-key", tool_manager=tool_manager)
+
+            messages = [{"role": "user", "content": "Hello"}]
+
+            # Create a non-ChatCompletion response (e.g., streaming chunk)
+            response = Mock(spec=ChatCompletionChunk)  # Not ChatCompletion
+
+            tool_calls = [ToolCall(call_id="call_123", name="test_tool", arguments='{"x": 10}')]
+            tool_results = [
+                ToolExecutionResult(
+                    call_id="call_123", name="test_tool", arguments='{"x": 10}', result="Result: 10"
+                )
+            ]
+
+            updated = client._update_messages_with_tool_calls(
+                messages, response, tool_calls, tool_results
+            )
+
+            # Should go to else branch and add assistant message + tool results
+            assert len(updated) == 3  # original + assistant + tool result
+            assert updated[1]["role"] == "assistant"
+            assert updated[1]["content"] is None  # None for streaming
+            assert updated[2]["role"] == "tool"
+            assert updated[2]["tool_call_id"] == "call_123"
