@@ -5,7 +5,7 @@ from nox import Session
 package = "chimeric"
 python_versions = ["3.11", "3.12", "3.13"]
 latest_python_version = python_versions[-1]
-providers = ["openai", "anthropic", "google", "cerebras", "cohere", "grok", "groq"]
+providers = ["openai", "anthropic", "google", "cerebras", "cohere", "grok", "groq", "openrouter"]
 nox.needs_version = ">= 2024.10.9"
 nox.options.sessions = ("unit", "integration")
 
@@ -87,6 +87,13 @@ def test_groq(session: Session) -> None:
     """Test chimeric[groq] installation and functionality."""
     session.run("uv", "sync", "--extra", "groq", "--dev", external=True)
     session.run("uv", "run", "pytest", "tests/integration", "-m", "groq", "--no-cov", external=True)
+
+
+@nox.session(python=latest_python_version)
+def test_openrouter(session: Session) -> None:
+    """Test chimeric[openrouter] installation and functionality."""
+    session.run("uv", "sync", "--extra", "openrouter", "--dev", external=True)
+    session.run("uv", "run", "pytest", "tests/integration", "-m", "openrouter", "--no-cov", external=True)
 
 
 @nox.session(python=latest_python_version)

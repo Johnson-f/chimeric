@@ -33,6 +33,7 @@ def get_vcr() -> vcr.VCR:
             "cohere-api-key",
             "grok-api-key",
             "groq-api-key",
+            "openrouter-api-key",
             "x-goog-api-key",
             "x-goog-request-id",
             "x-request-id",
