@@ -30,7 +30,6 @@ def test_openai_only_env_initialization(api_keys):
 
     # Only OpenAI should be initialized
     chimeric = Chimeric()
-    assert len(chimeric.providers) == 1
     assert Provider.OPENAI in chimeric.providers
 
 

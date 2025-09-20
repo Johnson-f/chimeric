@@ -106,11 +106,14 @@ class Chimeric:
         grok_api_key: str | None = None,
         groq_api_key: str | None = None,
         openrouter_api_key: str | None = None,
+        detect_from_env: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize Chimeric client with provider configuration.
 
         API keys can be provided explicitly or via environment variables.
+        By default, if explicit keys are provided, only those providers are initialized.
+        If no explicit keys are provided, auto-detection from environment variables occurs.
 
         Environment variables:
         - OPENAI_API_KEY
@@ -123,15 +126,30 @@ class Chimeric:
         - OPENROUTER_API_KEY
 
         Args:
-            openai_api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
-            anthropic_api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
-            google_api_key: Google AI API key (defaults to GOOGLE_API_KEY or GEMINI_API_KEY env var)
-            cerebras_api_key: Cerebras API key (defaults to CEREBRAS_API_KEY env var)
-            cohere_api_key: Cohere API key (defaults to COHERE_API_KEY or CO_API_KEY env var)
-            grok_api_key: xAI Grok API key (defaults to GROK_API_KEY or XAI_API_KEY env var)
-            groq_api_key: Groq API key (defaults to GROQ_API_KEY env var)
-            openrouter_api_key: OpenRouter API key (defaults to OPENROUTER_API_KEY env var)
+            openai_api_key: OpenAI API key. If provided, only initialize OpenAI provider.
+            anthropic_api_key: Anthropic API key. If provided, only initialize Anthropic provider.
+            google_api_key: Google AI API key. If provided, only initialize Google provider.
+            cerebras_api_key: Cerebras API key. If provided, only initialize Cerebras provider.
+            cohere_api_key: Cohere API key. If provided, only initialize Cohere provider.
+            grok_api_key: xAI Grok API key. If provided, only initialize Grok provider.
+            groq_api_key: Groq API key. If provided, only initialize Groq provider.
+            openrouter_api_key: OpenRouter API key. If provided, only initialize OpenRouter provider.
+            detect_from_env: If True, auto-detect additional providers from environment variables
+                even when explicit keys are provided. Defaults to False.
             **kwargs: Provider-specific options (timeout, base_url, max_retries, etc.)
+
+        Examples:
+            Initialize only OpenAI:
+            >>> client = Chimeric(openai_api_key="sk-...")
+
+            Initialize OpenAI and Anthropic only:
+            >>> client = Chimeric(openai_api_key="sk-...", anthropic_api_key="sk-ant-...")
+
+            Initialize from environment variables:
+            >>> client = Chimeric()
+
+            Mix explicit keys with environment detection:
+            >>> client = Chimeric(openai_api_key="sk-...", detect_from_env=True)
 
         Raises:
             ChimericError: If no providers can be initialized
@@ -146,6 +164,19 @@ class Chimeric:
         # Mapping of canonical model names to their providers
         self._model_provider_mapping: dict[str, Provider] = {}
 
+        # Collect all explicitly provided API keys
+        explicit_keys = [
+            openai_api_key,
+            anthropic_api_key,
+            google_api_key,
+            cerebras_api_key,
+            cohere_api_key,
+            grok_api_key,
+            groq_api_key,
+            openrouter_api_key,
+        ]
+        has_explicit_keys = any(key is not None for key in explicit_keys)
+
         # Initialize providers from explicit API keys.
         self._initialize_providers_from_config(
             openai_api_key,
@@ -159,8 +190,11 @@ class Chimeric:
             **kwargs,
         )
 
-        # Auto-detect providers from environment variables.
-        self._detect_providers_from_environment(kwargs)
+        # Auto-detect providers from environment variables only if:
+        # 1. No explicit keys were provided, OR
+        # 2. detect_from_env is explicitly set to True
+        if not has_explicit_keys or detect_from_env:
+            self._detect_providers_from_environment(kwargs)
 
     def _initialize_providers_from_config(
         self,

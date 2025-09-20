@@ -239,7 +239,9 @@ class OpenRouterClient(ChimericClient[OpenAI, ChatCompletion, ChatCompletionChun
         # Handle completion
         if choice.finish_reason:
             return create_stream_chunk(
-                native_event=event, processor=processor, finish_reason=choice.finish_reason
+                native_event=event,
+                processor=processor,
+                finish_reason=event.choices[0].finish_reason,
             )
 
         return None
@@ -545,41 +547,36 @@ class OpenRouterAsyncClient(ChimericAsyncClient[AsyncOpenAI, ChatCompletion, Cha
     def _process_provider_stream_event(
         self, event: ChatCompletionChunk, processor: StreamProcessor
     ) -> ChimericStreamChunk[ChatCompletionChunk] | None:
-        """Processes an OpenRouter async stream event using the standardized processor."""
-        if not event.choices:
-            return None
+        """Processes an OpenRouter async stream event using the standardized processor.
 
-        choice = event.choices[0]
-        delta = choice.delta
+        This is the same implementation as the sync client since event processing
+        is identical.
+        """
+        if event.choices and event.choices[0].delta.content:
+            delta = event.choices[0].delta.content
+            return create_stream_chunk(native_event=event, processor=processor, content_delta=delta)
 
-        # Handle content deltas
-        if delta.content:
-            return create_stream_chunk(
-                native_event=event, processor=processor, content_delta=delta.content
-            )
+        # Handle tool calls in streaming
+        if event.choices and event.choices[0].delta.tool_calls:
+            for tool_call_delta in event.choices[0].delta.tool_calls:
+                call_id = tool_call_delta.id or f"tool_call_{getattr(tool_call_delta, 'index', 0)}"
 
-        # Handle tool call deltas
-        if delta.tool_calls:
-            for tool_call_delta in delta.tool_calls:
-                if tool_call_delta.id:
-                    # New tool call starting
-                    processor.process_tool_call_start(
-                        tool_call_delta.id,
-                        tool_call_delta.function.name if tool_call_delta.function else "",
-                        tool_call_delta.id,
-                    )
-                elif tool_call_delta.function and tool_call_delta.function.arguments:
-                    # Tool call arguments delta - need the tool call ID from index
-                    # For OpenAI streaming, we track by index
-                    tool_call_id = f"call_{tool_call_delta.index}"
-                    processor.process_tool_call_delta(
-                        tool_call_id, tool_call_delta.function.arguments
-                    )
+                if tool_call_delta.function and tool_call_delta.function.name:
+                    processor.process_tool_call_start(call_id, tool_call_delta.function.name)
+
+                if tool_call_delta.function and tool_call_delta.function.arguments:
+                    processor.process_tool_call_delta(call_id, tool_call_delta.function.arguments)
 
         # Handle completion
-        if choice.finish_reason:
+        if event.choices and event.choices[0].finish_reason:
+            # Mark any streaming tool calls as complete
+            for call_id in processor.state.tool_calls:
+                processor.process_tool_call_complete(call_id)
+
             return create_stream_chunk(
-                native_event=event, processor=processor, finish_reason=choice.finish_reason
+                native_event=event,
+                processor=processor,
+                finish_reason=event.choices[0].finish_reason,
             )
 
         return None

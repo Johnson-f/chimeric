@@ -35,15 +35,29 @@ export CEREBRAS_API_KEY="csk-..."
 export GROK_API_KEY="xai-..."
 # or
 export GROK_API_TOKEN="xai-..."
+
+# OpenRouter
+export OPENROUTER_API_KEY="sk-or-..."
 ```
 
 ### Direct Initialization
 
-You can also provide API keys directly when creating the client:
+You can also provide API keys directly when creating the client. **Important**: When you provide explicit API keys, only those specific providers are initialized (environment auto-detection is disabled by default):
 
 ```python
 from chimeric import Chimeric
 
+# Only initialize specific providers
+client = Chimeric(openai_api_key="sk-...")  # Only OpenAI
+
+# Initialize multiple specific providers
+client = Chimeric(
+    openai_api_key="sk-...",
+    anthropic_api_key="sk-ant-...",
+    google_api_key="AIza..."
+)
+
+# All providers
 client = Chimeric(
     openai_api_key="sk-...",
     anthropic_api_key="sk-ant-...",
@@ -51,21 +65,46 @@ client = Chimeric(
     cohere_api_key="your-key",
     groq_api_key="gsk_...",
     cerebras_api_key="csk-...",
-    grok_api_key="xai-..."
+    grok_api_key="xai-...",
+    openrouter_api_key="sk-or-..."
 )
 ```
 
 ### Mixed Configuration
 
-Combine environment variables with direct initialization:
+By default, when you provide explicit API keys, only those providers are initialized. To also auto-detect additional providers from environment variables, use the `detect_from_env` parameter:
 
 ```python
-# Some keys from environment, others provided directly
+# Initialize OpenAI explicitly, plus any others from environment
 client = Chimeric(
-    openai_api_key="sk-...",  # Explicit key
-    # anthropic_api_key will be read from ANTHROPIC_API_KEY env var
-    # google_api_key will be read from GOOGLE_API_KEY env var
+    openai_api_key="sk-...",  # Explicit OpenAI
+    detect_from_env=True      # Auto-detect others from env vars
 )
+
+# Alternative: Auto-detect everything from environment
+client = Chimeric()  # Detects all available providers from env vars
+```
+
+### Provider Selection Examples
+
+```python
+# Scenario 1: Only specific providers
+client = Chimeric(
+    openai_api_key="sk-...",
+    anthropic_api_key="sk-ant-..."
+)
+# Result: Only OpenAI and Anthropic are initialized
+
+# Scenario 2: Mix explicit + environment detection
+client = Chimeric(
+    openai_api_key="sk-...",   # Always use this OpenAI key
+    detect_from_env=True       # Also check env for other providers
+)
+# Result: OpenAI (explicit) + any others found in environment
+
+# Scenario 3: Environment-only detection
+client = Chimeric()
+# Result: All providers found in environment variables
 ```
 
 ### Provider-Specific Configuration

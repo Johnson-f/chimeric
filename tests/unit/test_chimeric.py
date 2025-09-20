@@ -281,7 +281,7 @@ class TestChimericInitialization:
             assert chimeric.providers[Provider.GOOGLE].api_key == "env-google-key"
 
     def test_mixed_initialization(self):
-        """Test initialization with both explicit and environment variables."""
+        """Test initialization with both explicit and environment variables using detect_from_env."""
         env_vars = {"OPENAI_API_KEY": "env-openai-key"}
 
         with (
@@ -301,12 +301,82 @@ class TestChimericInitialization:
                 },
             ),
         ):
-            chimeric = Chimeric(anthropic_api_key="explicit-anthropic-key")
+            # With detect_from_env=True, should get both explicit and environment providers
+            chimeric = Chimeric(anthropic_api_key="explicit-anthropic-key", detect_from_env=True)
 
             assert len(chimeric.providers) == 2
             # Explicit key should take precedence over environment
             assert chimeric.providers[Provider.ANTHROPIC].api_key == "explicit-anthropic-key"
             assert chimeric.providers[Provider.OPENAI].api_key == "env-openai-key"
+
+    def test_explicit_only_initialization(self):
+        """Test initialization with explicit keys only (no environment detection)."""
+        env_vars = {"OPENAI_API_KEY": "env-openai-key"}
+
+        with (
+            patch.dict(os.environ, env_vars),
+            patch.dict(
+                PROVIDER_CLIENTS,
+                {
+                    Provider.OPENAI: MockProviderClient,
+                    Provider.ANTHROPIC: MockProviderClient,
+                },
+            ),
+            patch.dict(
+                ASYNC_PROVIDER_CLIENTS,
+                {
+                    Provider.OPENAI: MockAsyncProviderClient,
+                    Provider.ANTHROPIC: MockAsyncProviderClient,
+                },
+            ),
+        ):
+            # Without detect_from_env, should only get explicitly provided providers
+            chimeric = Chimeric(anthropic_api_key="explicit-anthropic-key")
+
+            assert len(chimeric.providers) == 1
+            # Only the explicitly provided provider should be initialized
+            assert Provider.ANTHROPIC in chimeric.providers
+            assert Provider.OPENAI not in chimeric.providers
+            assert chimeric.providers[Provider.ANTHROPIC].api_key == "explicit-anthropic-key"
+
+    def test_detect_from_env_parameter(self):
+        """Test the detect_from_env parameter behavior."""
+        env_vars = {
+            "OPENAI_API_KEY": "env-openai-key",
+            "ANTHROPIC_API_KEY": "env-anthropic-key"
+        }
+
+        with (
+            patch.dict(os.environ, env_vars),
+            patch.dict(
+                PROVIDER_CLIENTS,
+                {
+                    Provider.OPENAI: MockProviderClient,
+                    Provider.ANTHROPIC: MockProviderClient,
+                },
+            ),
+            patch.dict(
+                ASYNC_PROVIDER_CLIENTS,
+                {
+                    Provider.OPENAI: MockAsyncProviderClient,
+                    Provider.ANTHROPIC: MockAsyncProviderClient,
+                },
+            ),
+        ):
+            # Test detect_from_env=False (default behavior)
+            chimeric1 = Chimeric(openai_api_key="explicit-openai-key", detect_from_env=False)
+            assert len(chimeric1.providers) == 1
+            assert Provider.OPENAI in chimeric1.providers
+            assert Provider.ANTHROPIC not in chimeric1.providers
+
+            # Test detect_from_env=True
+            chimeric2 = Chimeric(openai_api_key="explicit-openai-key", detect_from_env=True)
+            assert len(chimeric2.providers) == 2
+            assert Provider.OPENAI in chimeric2.providers
+            assert Provider.ANTHROPIC in chimeric2.providers
+            # Explicit key should take precedence
+            assert chimeric2.providers[Provider.OPENAI].api_key == "explicit-openai-key"
+            assert chimeric2.providers[Provider.ANTHROPIC].api_key == "env-anthropic-key"
 
     def test_alternative_environment_variables(self):
         """Test initialization with alternative environment variable names."""

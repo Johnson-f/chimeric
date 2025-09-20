@@ -24,6 +24,7 @@
 [![Groq](https://img.shields.io/badge/Groq-F55036?logo=groq&logoColor=white)](https://groq.com/)
 [![Cohere](https://img.shields.io/badge/Cohere-39594A?logo=cohere&logoColor=white)](https://cohere.ai/)
 [![Cerebras](https://img.shields.io/badge/Cerebras-FF6B35?logo=cerebras&logoColor=white)](https://cerebras.ai/)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-8A2BE2?logo=openrouter&logoColor=white)](https://openrouter.ai/)
 
 ## 📖 Documentation
 
@@ -54,7 +55,14 @@ export ANTHROPIC_API_KEY="your-key-here"
 ```python
 from chimeric import Chimeric
 
-client = Chimeric()  # Auto-detects API keys from environment
+# Auto-detect from environment variables
+client = Chimeric()
+
+# Or specify providers explicitly
+client = Chimeric(
+    openai_api_key="sk-...",
+    anthropic_api_key="sk-ant-..."
+)
 
 response = client.generate(
     model="gpt-4o",
@@ -100,6 +108,21 @@ response = client.generate(
 print(response.content)
 ```
 
+### Provider Initialization
+```python
+# Only initialize specific providers
+client = Chimeric(openai_api_key="sk-...")  # Only OpenAI
+
+# Mix explicit keys with environment detection
+client = Chimeric(
+    openai_api_key="sk-...",  # Explicit OpenAI
+    detect_from_env=True      # Plus any from environment
+)
+
+# Auto-detect all from environment
+client = Chimeric()  # Detects all available providers
+```
+
 ### Multi-Provider Switching
 ```python
 # Seamlessly switch between providers
@@ -116,8 +139,8 @@ for model in models:
 
 ## 🔧 Key Features
 
-- **Multi-Provider Support**: Switch between 7 major AI providers seamlessly
-- **Automatic Detection**: Auto-detects available API keys from environment
+- **Multi-Provider Support**: Switch between 8 major AI providers seamlessly
+- **Flexible Initialization**: Auto-detect from environment or specify providers explicitly
 - **Unified Interface**: Consistent API across all providers
 - **Streaming Support**: Real-time response streaming
 - **Function Calling**: Tool integration with decorators
